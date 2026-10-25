@@ -1,0 +1,13 @@
+[Unit]
+Description=Make Bluetooth adapter accept incoming connections (DualSense reconnect)
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/sleep 2
+ExecStart=/usr/bin/btmgmt connectable on
+RemainAfterExit=yes
+
+[Install]
+WantedBy=bluetooth.target

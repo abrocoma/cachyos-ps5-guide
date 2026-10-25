@@ -1,0 +1,6 @@
+#!/bin/sh
+# Lock DP-1 to 4 lanes HBR3 so the PS5 DP->HDMI bridge survives sub-4K modes.
+f=/sys/kernel/debug/dri/0/DP-1/link_settings
+mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
+for i in $(seq 60); do [ -e "$f" ] && break; sleep 0.5; done
+echo "4 0x1e" > "$f"

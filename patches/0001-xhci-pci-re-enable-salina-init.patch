@@ -1,0 +1,17 @@
+--- a/drivers/usb/host/xhci-pci.c
++++ b/drivers/usb/host/xhci-pci.c
+@@ -587,14 +587,12 @@
+ 	/* imod_interval is the interrupt moderation value in nanoseconds. */
+ 	xhci->imod_interval = 40000;
+ 
+-#if 0
+     if (pdev->vendor == PCI_VENDOR_ID_SONY &&
+ 		pdev->device == PCI_DEVICE_ID_PS5_SALINA_XHCI) {
+ 		retval = xhci_salina_init(pdev);
+ 		if (retval)
+ 			return retval;
+     }
+-#endif
+ 
+ 	retval = xhci_gen_setup(hcd, xhci_pci_quirks);
+ 	if (retval)

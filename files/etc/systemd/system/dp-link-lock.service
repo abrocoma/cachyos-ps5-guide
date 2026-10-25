@@ -1,0 +1,12 @@
+[Unit]
+Description=Lock DP-1 link to 4x HBR3 (PS5 HDMI bridge)
+After=systemd-modules-load.service sys-kernel-debug.mount
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/dp-link-lock
+
+[Install]
+WantedBy=multi-user.target
