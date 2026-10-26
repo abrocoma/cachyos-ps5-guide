@@ -396,14 +396,16 @@ sudo systemctl enable --now ps5fan ps5boost
 | 1080p @ 60 Hz | ✅ |
 | 1440p @ 60 Hz | ✅ |
 | 2160p @ 60 Hz | ✅ |
-| 1440p @ 120 Hz | ✅ with `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` (kernel rebuild, see below) |
+| 1440p @ 120 Hz | ⚠️ experimental, with `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` (kernel rebuild, see below). Can be unstable after boot |
 
 **1440p @ 120 Hz:** the ps5-linux kernel only allows 1440p at 60 Hz, even though PS5 OS can do 120. `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` does two things:
 
 1. Allows 2560x1440@120 and gives it the same HDMI bridge settings as 2160p60.
 2. Fixes the picture position. The HDMI chip places 1440p as if it had standard timing, so on monitors with different timing (my Samsung Odyssey G5) the picture sat too low, with a black strip at the top. The fix moves the sync pulses to where the chip expects them. It's ported from [VivaLaVent/ps5-bazzite-deck](https://github.com/VivaLaVent/ps5-bazzite-deck).
 
-Apply it in the kernel tree after `linux.patch` (`patch -p1 < .../0002-*.patch`), then rebuild ([section 11](#11-boot-settings-and-building-your-own-kernel)). It's built into the kernel, so only the bzImage changes. Stable for me at 1440p@120. dmesg shows `FLAVA3 1440p: standard syncs ...` when the fix kicks in.
+Apply it in the kernel tree after `linux.patch` (`patch -p1 < .../0002-*.patch`), then rebuild ([section 11](#11-boot-settings-and-building-your-own-kernel)). It's built into the kernel, so only the bzImage changes. dmesg shows `FLAVA3 1440p: standard syncs ...` when the fix kicks in.
+
+**Known issue: unstable after boot.** It ran fine for me for a whole session, but on a later boot the picture kept blacking out right after boot. It would come back for a moment and drop again, and switching monitor inputs didn't reliably fix it. The kernel logs nothing when this happens (just the usual link-training errors at boot), so the HDMI signal is probably right at its limit. Switching to 1440p@60 fixed it straight away. If you try 120 Hz, use a short, certified Ultra High Speed HDMI cable. If the screen goes black, switch to 60 Hz with `kscreen-doctor output.DP-1.mode.<n>`, because KDE's "Keep display configuration?" prompt reverts the change if you can't see it to confirm. 1080p@120 has been stable throughout.
 
 Runtime switches (they apply on the next mode set, so switch to 60 Hz and back):
 
