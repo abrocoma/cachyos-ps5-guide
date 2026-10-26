@@ -405,7 +405,15 @@ sudo systemctl enable --now ps5fan ps5boost
 
 Apply it in the kernel tree after `linux.patch` (`patch -p1 < .../0002-*.patch`), then rebuild ([section 11](#11-boot-settings-and-building-your-own-kernel)). It's built into the kernel, so only the bzImage changes. dmesg shows `FLAVA3 1440p: standard syncs ...` when the fix kicks in.
 
-**Known issue: unstable after boot.** It ran fine for me for a whole session, but on a later boot the picture kept blacking out right after boot. It would come back for a moment and drop again, and switching monitor inputs didn't reliably fix it. The kernel logs nothing when this happens (just the usual link-training errors at boot), so the HDMI signal is probably right at its limit. Switching to 1440p@60 fixed it straight away. If you try 120 Hz, use a short, certified Ultra High Speed HDMI cable. If the screen goes black, switch to 60 Hz with `kscreen-doctor output.DP-1.mode.<n>`, because KDE's "Keep display configuration?" prompt reverts the change if you can't see it to confirm. 1080p@120 has been stable throughout.
+**Known issue: unstable after boot.** It ran fine for me for a whole session, but on a later boot the picture kept blacking out right after boot. It would come back for a moment and drop again, and switching monitor inputs didn't reliably fix it. The kernel logs nothing when this happens (just the usual link-training errors at boot), so the HDMI signal is probably right at its limit. If you try 120 Hz, use a short, certified Ultra High Speed HDMI cable. 1080p@120 has been stable throughout.
+
+What fixes the boot blackouts, from least to most effort:
+
+1. **Switch VTs: Ctrl+Alt+F7, then Ctrl+Alt+F1.** Leaving tty1 and coming back makes the compositor do a full mode set, and the picture comes back and stays. This has worked for me on several boots.
+2. **If the picture comes back for a few seconds before dropping again:** use that window to switch to 60 Hz in Display Settings, confirm, then switch back to 120 Hz. The fresh mode set usually holds.
+3. **If you can't see anything at all:** switch to 60 Hz from a terminal or over SSH with `kscreen-doctor output.DP-1.mode.<n>` (`kscreen-doctor -o` lists the modes). KDE's "Keep display configuration?" prompt reverts changes you can't confirm, so the GUI won't work blind.
+
+**After the VT switch, USB keyboard, mouse or controllers sometimes stop responding.** Unplug them and plug them back in.
 
 Runtime switches (they apply on the next mode set, so switch to 60 Hz and back):
 
