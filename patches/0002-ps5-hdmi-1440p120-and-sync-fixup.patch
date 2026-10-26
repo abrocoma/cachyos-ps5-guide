@@ -1,0 +1,220 @@
+ps5: hdmi: allow 1440p120 and fix the 1440p picture position on FLAVA3
+
+Applies on top of linux.patch from ps5-linux-patches (tested on 1ec6a4a,
+kernel 7.2.3). Apply with: patch -p1 < 0002-ps5-hdmi-1440p120-and-sync-fixup.patch
+
+1. isHdmiModeValid() only allowed 1440p60, so 1440p only showed 60 Hz.
+   Now 2560x1440@120 (>340 MHz) is allowed too, and it gets the 2160p60
+   FLAVA3 bridge settings. Runtime knob /sys/module/hdmi/parameters/hiclk_mask
+   (default 0x7; 0x8 also sets 0x7072/0x7074/0x7206, which shifts the
+   picture on a Samsung Odyssey G5, so leave it off).
+
+2. FLAVA3 places a 1440p picture as if the vertical back porch were 33
+   lines. Monitors whose 1440p120 EDID timing differs (Odyssey G5: 77)
+   get the picture pushed down with a black strip at the top.
+   ps5_hdmi_fixup_timing() moves the syncs to the standard place (totals
+   and pixel clock unchanged). Ported from VivaLaVent/ps5-bazzite-deck
+   v1.3.1 (ps5-hdmi-modes.patch). Toggle: /sys/module/hdmi/parameters/sync_fixup
+   (default Y). Both knobs take effect on the next mode set.
+
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index 581a87e..a024e61 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -7777,6 +7777,10 @@ create_stream_for_sink(struct drm_connector *connector,
+ 	if (recalculate_timing)
+ 		drm_mode_set_crtcinfo(&saved_mode, 0);
+ 
++#ifdef CONFIG_X86_PS5
++	ps5_hdmi_fixup_timing(&mode);
++#endif
++
+ 	/*
+ 	 * If scaling is enabled and refresh rate didn't change
+ 	 * we copy the vic and polarities of the old timings
+diff --git a/drivers/ps5/hdmi.c b/drivers/ps5/hdmi.c
+index d74847f..2d8ed03 100755
+--- a/drivers/ps5/hdmi.c
++++ b/drivers/ps5/hdmi.c
+@@ -113,6 +113,30 @@ static bool scrambling;
+ static bool hdr_enabled;
+ static bool bt2020_enabled;
+ 
++/*
++ * Experimental 1440p120 (497.75 MHz, above the 340 MHz HDMI 1.4 limit).
++ * Each bit applies one group of the 2160p60 FLAVA3 settings to it:
++ *   0x1: bridge 0x7019 = 0x01
++ *   0x2: SCDC scrambling + 1/40 clock ratio in the sink
++ *   0x4: 0x7011 = 0xff
++ *   0x8: 0x7072/0x7074/0x7206 as for 2160p60
++ * Takes effect on the next mode set.
++ */
++static uint hiclk_mask = 0x7;
++module_param(hiclk_mask, uint, 0644);
++
++static bool is1440p120(const struct drm_display_mode *mode)
++{
++	return mode->hdisplay == 2560 && mode->vdisplay == 1440 &&
++	       mode->clock > 340000 && drm_mode_vrefresh(mode) == 120;
++}
++
++static bool hiclk(const struct drm_display_mode *mode, uint bit)
++{
++	return drm_match_cea_mode(mode) == 97 ||
++	       (is1440p120(mode) && (hiclk_mask & bit));
++}
++
+ static void i2c_init(u8 code)
+ {
+ 	i2c_ctx.msg_cur = i2c_ctx.msg_buf;
+@@ -817,16 +841,13 @@ static void setHdmiBasicVideoConfigFlava3(const struct drm_display_mode *mode,
+ 	}
+ 	i2c_write(0x10e7, 0xff);
+ 	i2c_write(0x7202, 0x20);
+-	if (vic == 97) {
++	if (hiclk(mode, 0x8)) {
+ 		i2c_write(0x7072, 0x01);
+ 		i2c_write(0x7074, 0x07);
+ 		i2c_write(0x7206, 0x80);
+-		i2c_write(0x7203, 0x60);
+-		i2c_write(0x7011, 0xff);
+-	} else {
+-		i2c_write(0x7203, 0x60);
+-		i2c_write(0x7011, 0xd5);
+ 	}
++	i2c_write(0x7203, 0x60);
++	i2c_write(0x7011, hiclk(mode, 0x4) ? 0xff : 0xd5);
+ 	i2c_end_block();
+ 	i2c_waitclear(0x7011, 0xff);
+ 	i2c_exec();
+@@ -850,11 +871,7 @@ static void setVideoAdditionalConfigFlava3(const struct drm_display_mode *mode)
+ 	i2c_waitclear(0x7204, 0x40);
+ 	i2c_delay(10);
+ 	i2c_begin_block();
+-	if (vic == 97) {
+-		i2c_write(0x7019, 0x01);
+-	} else {
+-		i2c_write(0x7019, 0x00);
+-	}
++	i2c_write(0x7019, hiclk(mode, 0x1) ? 0x01 : 0x00);
+ 	i2c_write(0x7419, 0x05);
+ 	i2c_write(0x740a, 0xff);
+ 	i2c_end_block();
+@@ -866,15 +883,15 @@ static void setVideoAdditionalConfigFlava3(const struct drm_display_mode *mode)
+ 	i2c_waitclear(0x7a84, 0x01);
+ 	i2c_begin_block();
+ 	i2c_write(0x7a8b, 0x05);
+-	if (vic == 97 || scrambling) {
+-		i2c_write(0x7c00, vic == 97 ? 0x03 : 0x00);
++	if (hiclk(mode, 0x2) || scrambling) {
++		i2c_write(0x7c00, hiclk(mode, 0x2) ? 0x03 : 0x00);
+ 		i2c_write_data(0x7a80, (u8[]){0xa8, 0x20, 0x00, 0x80}, 4);
+ 	}
+ 	i2c_end_block();
+-	if (vic == 97 || scrambling) {
++	if (hiclk(mode, 0x2) || scrambling) {
+ 		i2c_waitclear(0x7a84, 0x01);
+ 	}
+-	scrambling = vic == 97;
++	scrambling = hiclk(mode, 0x2);
+ 	i2c_begin_block();
+ 	i2c_write(0x7021, 0xff);
+ 	i2c_write(0x700a, 0x02);
+@@ -1268,7 +1285,8 @@ bool isHdmiModeValid(const struct drm_display_mode *mode, int force_1080p)
+ 
+ 	/* 1440p */
+ 	if (mode->hdisplay == 2560 && mode->vdisplay == 1440) {
+-		return mode->clock == 241500 || mode->clock == 241700;
++		return mode->clock == 241500 || mode->clock == 241700 ||
++		       is1440p120(mode);
+ 	}
+ 
+ 	switch (vic) {
+@@ -1282,6 +1300,75 @@ bool isHdmiModeValid(const struct drm_display_mode *mode, int force_1080p)
+ }
+ EXPORT_SYMBOL(isHdmiModeValid);
+ 
++/*
++ * FLAVA3 places a 1440p picture as if the signal had the timing of the
++ * standard 2560x1440@60 (+hsync 32 px / 80 px back porch, -vsync with a
++ * 33-line back porch). Sinks whose own 1440p mode differs get a shifted
++ * picture (e.g. Samsung Odyssey G5 1440p120: 77-line vertical back porch,
++ * picture pushed down 44 lines). Move the syncs to the standard place;
++ * totals and pixel clock stay the same.
++ * Ported from VivaLaVent/ps5-bazzite-deck v1.3.1 (ps5-hdmi-modes.patch).
++ * sync_fixup=0 disables it (takes effect on the next mode set).
++ */
++#define PS5_FLAVA3_1440P_HSW	32
++#define PS5_FLAVA3_1440P_HBP	80
++#define PS5_FLAVA3_1440P_VBP	33
++
++static bool sync_fixup = true;
++module_param(sync_fixup, bool, 0644);
++
++static bool ps5_set_sync(int disp, int total, int bp, int width, u16 *start, u16 *end)
++{
++	int new_end = total - bp;
++	int new_start = new_end - width;
++
++	if (width <= 0 || new_start <= disp ||
++	    (new_start == *start && new_end == *end))
++		return false;
++	*start = new_start;
++	*end = new_end;
++	return true;
++}
++
++void ps5_hdmi_fixup_timing(struct drm_display_mode *m)
++{
++	static u16 last_hs, last_vs;
++	static u32 last_flags;
++	bool h, v, pol = false;
++
++	if (!sync_fixup || hdmi_ic_type != HDMI_IC_TYPE_FLAVA3 ||
++	    m->hdisplay != 2560 || m->vdisplay != 1440)
++		return;
++
++	h = ps5_set_sync(m->hdisplay, m->htotal, PS5_FLAVA3_1440P_HBP,
++			 PS5_FLAVA3_1440P_HSW, &m->hsync_start, &m->hsync_end);
++	v = ps5_set_sync(m->vdisplay, m->vtotal, PS5_FLAVA3_1440P_VBP,
++			 m->vsync_end - m->vsync_start, &m->vsync_start, &m->vsync_end);
++	ps5_set_sync(m->crtc_hdisplay, m->crtc_htotal, PS5_FLAVA3_1440P_HBP,
++		     PS5_FLAVA3_1440P_HSW, &m->crtc_hsync_start, &m->crtc_hsync_end);
++	ps5_set_sync(m->crtc_vdisplay, m->crtc_vtotal, PS5_FLAVA3_1440P_VBP,
++		     m->crtc_vsync_end - m->crtc_vsync_start,
++		     &m->crtc_vsync_start, &m->crtc_vsync_end);
++	if (m->flags & DRM_MODE_FLAG_NHSYNC) {
++		m->flags = (m->flags & ~DRM_MODE_FLAG_NHSYNC) | DRM_MODE_FLAG_PHSYNC;
++		pol = true;
++	}
++	if (m->flags & DRM_MODE_FLAG_PVSYNC) {
++		m->flags = (m->flags & ~DRM_MODE_FLAG_PVSYNC) | DRM_MODE_FLAG_NVSYNC;
++		pol = true;
++	}
++	if ((h || v || pol) &&
++	    (m->hsync_start != last_hs || m->vsync_start != last_vs || m->flags != last_flags)) {
++		last_hs = m->hsync_start;
++		last_vs = m->vsync_start;
++		last_flags = m->flags;
++		pr_info("FLAVA3 1440p: standard syncs (hsync %d-%d +, vsync %d-%d %c)\n",
++			m->hsync_start, m->hsync_end, m->vsync_start, m->vsync_end,
++			(m->flags & DRM_MODE_FLAG_PVSYNC) ? '+' : '-');
++	}
++}
++EXPORT_SYMBOL(ps5_hdmi_fixup_timing);
++
+ bool isHdmiHdrSupported(void)
+ {
+ 	return hdmi_ic_type == HDMI_IC_TYPE_FLAVA3;
+diff --git a/include/linux/ps5.h b/include/linux/ps5.h
+index a164703..0095ac7 100755
+--- a/include/linux/ps5.h
++++ b/include/linux/ps5.h
+@@ -66,6 +66,7 @@ int getHdmiConfiguration(void);
+ u32 getHdmiDpAudioN(u32 default_n);
+ bool isHdmiModeValid(const struct drm_display_mode *mode, int force_1080p);
+ bool isHdmiHdrSupported(void);
++void ps5_hdmi_fixup_timing(struct drm_display_mode *mode);
+ 
+ int icc_nvs_write(u32 partition, u16 offset, u16 length, const void *data);
+ int icc_nvs_read(u32 partition, u16 offset, u16 length, void *data);

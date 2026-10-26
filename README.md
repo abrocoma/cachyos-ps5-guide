@@ -396,7 +396,21 @@ sudo systemctl enable --now ps5fan ps5boost
 | 1080p @ 60 Hz | ✅ |
 | 1440p @ 60 Hz | ✅ |
 | 2160p @ 60 Hz | ✅ |
-| 1440p @ 120 Hz | ⚠️ needs an experimental `hdmi.c` patch, not fully stable yet |
+| 1440p @ 120 Hz | ✅ with `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` (kernel rebuild, see below) |
+
+**1440p @ 120 Hz:** the ps5-linux kernel only allows 1440p at 60 Hz, even though PS5 OS can do 120. `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` does two things:
+
+1. Allows 2560x1440@120 and gives it the same HDMI bridge settings as 2160p60.
+2. Fixes the picture position. The HDMI chip places 1440p as if it had standard timing, so on monitors with different timing (my Samsung Odyssey G5) the picture sat too low, with a black strip at the top. The fix moves the sync pulses to where the chip expects them. It's ported from [VivaLaVent/ps5-bazzite-deck](https://github.com/VivaLaVent/ps5-bazzite-deck).
+
+Apply it in the kernel tree after `linux.patch` (`patch -p1 < .../0002-*.patch`), then rebuild ([section 11](#11-boot-settings-and-building-your-own-kernel)). It's built into the kernel, so only the bzImage changes. Stable for me at 1440p@120. dmesg shows `FLAVA3 1440p: standard syncs ...` when the fix kicks in.
+
+Runtime switches (they apply on the next mode set, so switch to 60 Hz and back):
+
+| File | Default | What it does |
+|---|---|---|
+| `/sys/module/hdmi/parameters/sync_fixup` | `Y` | Picture position fix. `N` turns it off |
+| `/sys/module/hdmi/parameters/hiclk_mask` | `7` | Which 2160p60 settings 1440p120 uses. `0xf` adds a group that pushed the picture down on my G5, so leave it at `7` |
 
 <sub>[↑ Back to contents](#contents)</sub>
 
@@ -424,7 +438,7 @@ root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-stora
 
 ### Building your own kernel
 
-Only needed for the [Bluetooth fix](#no-bluetooth-adapter-at-all) or the 1440p120 patch. The image's kernel works without it.
+Only needed for the [Bluetooth fix](#no-bluetooth-adapter-at-all) or the [1440p120 patch](#10-video-playback-and-refresh-rates). The image's kernel works without it.
 
 Use the mainline kernel source with `linux.patch` and `.config` from [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches). Then:
 
@@ -464,6 +478,7 @@ Check: `journalctl -b | grep -i "ordering cycle"` should return nothing.
 | `files/etc/systemd/system/bt-connectable.service` | Lets the DualSense reconnect | 8 |
 | `files/etc/modules-load.d/dualsense.conf` | Loads `hidp` + `hid_playstation` | 8 |
 | `patches/0001-xhci-pci-re-enable-salina-init.patch` | Kernel patch that brings Bluetooth back | 8 |
+| `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` | Kernel patch for 1440p @ 120 Hz with the right picture position | 10 |
 | `files/etc/systemd/zram-generator.conf` | zram swap, ram/2, zstd | 9 |
 | `files/home/steam/.config/chrome-flags.conf` | Chrome hardware decode flags | 10 |
 | `files/boot/efi/cmdline.txt.example` | Kernel command line | 11 |
@@ -477,5 +492,6 @@ Check: `journalctl -b | grep -i "ordering cycle"` should return nothing.
   - [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches): kernel patches, `.config`, `ps5_vcn.bin`
   - [ps5-linux-mwifiex](https://github.com/ps5-linux/ps5-linux-mwifiex): Wi-Fi driver
   - [ps5-linux-tools](https://github.com/ps5-linux/ps5-linux-tools): fan and boost control
+- **[VivaLaVent/ps5-bazzite-deck](https://github.com/VivaLaVent/ps5-bazzite-deck)**: the 1440p sync fix the 1440p120 patch is based on
 
 This repo only collects the fixes I needed on top.
