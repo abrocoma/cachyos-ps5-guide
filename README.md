@@ -297,12 +297,19 @@ It reconnects on its own at every boot. Check with `nmcli device status`: `wlp64
 ```sh
 git clone https://github.com/abrocoma/cachyos-ps5-guide
 cd cachyos-ps5-guide
-sudo ./install.sh                 # black screen lock, DualSense reconnect, zram, boot-order fix
-./scripts/boot-to-desktop.sh      # boot straight to the desktop instead of Gaming Mode
+sudo ./install.sh
 ```
-Then reboot (and run the exploit + loader again, see [section 2](#2-boot-into-linux)).
 
-`install.sh` doesn't touch the kernel, the Wi-Fi driver or `/boot/efi`. Those are covered in sections 6 and 11.
+It always installs the black screen lock, DualSense reconnect, zram, boot-order fix and Chrome video flags, and says which were already installed. A menu lets you pick the extras. Anything already installed shows up as "installed" and starts unticked; tick it anyway to reinstall (e.g. the Wi-Fi driver after a kernel update):
+
+- Fan and boost control ([section 9](#9-fan-performance-and-memory), needs internet)
+- Wi-Fi driver ([section 6](#6-wi-fi), needs internet, takes a few minutes)
+- Faster internet loading, using Cloudflare DNS ([section 13](#13-internet-speed-and-browsing))
+- Skip Gamescope, boot to desktop ([section 4](#4-boot-straight-to-the-desktop))
+
+`sudo ./install.sh -y` skips the menu and installs every extra that isn't installed yet. Without `dialog` it uses `whiptail`, and without either it asks yes/no questions instead. Then reboot (and run the exploit + loader again, see [section 2](#2-boot-into-linux)).
+
+`install.sh` doesn't touch the kernel or `/boot/efi`. The kernel patches are in [section 11](#11-boot-settings-and-building-your-own-kernel).
 
 <sub>[↑ Back to contents](#contents)</sub>
 
@@ -512,7 +519,7 @@ Then restart your browser.
 
 | Path | What it is | Section |
 |---|---|---|
-| `install.sh` | Installs and enables the fixes | 7 |
+| `install.sh` | Installs the fixes, asks before the optional ones | 7 |
 | `scripts/boot-to-desktop.sh` | Pick `plasma` or `gamescope` for the next boot | 4 |
 | `scripts/fix-black-screen.sh` | TTY switch + link re-lock + double hotplug | 5 |
 | `files/usr/local/bin/dp-link-lock` | Locks the display link to 4 lanes HBR3 | 5 |
