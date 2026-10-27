@@ -59,6 +59,7 @@ Big thanks to **[soniciso1](https://github.com/soniciso1)** for the loader with 
 
 11. [Boot settings and building your own kernel](#11-boot-settings-and-building-your-own-kernel)
 12. [Modules and sysctl silently not loading](#12-modules-and-sysctl-silently-not-loading)
+13. [Internet speed and browsing](#13-internet-speed-and-browsing)
 
 [What's in this repo](#whats-in-this-repo) · [Credits](#credits)
 
@@ -471,6 +472,33 @@ Use the mainline kernel source with `linux.patch` and `.config` from [ps5-linux-
 DefaultDependencies=no
 ```
 Check: `journalctl -b | grep -i "ordering cycle"` should return nothing.
+
+<sub>[↑ Back to contents](#contents)</sub>
+
+## 13. Internet speed and browsing
+
+**Symptom:** websites and online apps (Steam, launchers, updates) take 5-10 seconds to start loading. Downloads are fast once they start.
+
+**Cause:** some home routers' DNS stalls on certain lookups. Setting 1.1.1.1 in the router doesn't help, because lookups still go through the router. It has to be set on the PS5 itself.
+
+**Fix:** set the DNS on each saved connection (wired and Wi-Fi). In **System Settings → Wi-Fi & Internet**, pick the connection, then:
+- **IPv4** tab: set Method to **Automatic (Only addresses)** and DNS Servers to `1.1.1.1, 1.0.0.1`
+- **IPv6** tab: set Method to **Automatic (Only addresses)**
+- **Apply**, then reconnect
+
+![KDE connection settings, IPv4 tab: Method "Automatic (Only addresses)", DNS Servers 1.1.1.1,1.0.0.1](images/kde-dns-ipv4.png)
+
+<details>
+<summary>Or do it all from a terminal</summary>
+
+```sh
+nmcli -t -f NAME con show   # list connection names
+sudo nmcli con mod "Wired connection 1" ipv4.dns "1.1.1.1 1.0.0.1" ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes
+sudo nmcli device reapply <interface>   # e.g. enp64s0f2
+```
+</details>
+
+Then restart your browser.
 
 <sub>[↑ Back to contents](#contents)</sub>
 
