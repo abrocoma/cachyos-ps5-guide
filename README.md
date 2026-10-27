@@ -397,7 +397,7 @@ sudo systemctl enable --now ps5fan ps5boost
 | 1080p @ 60 Hz | ✅ |
 | 1440p @ 60 Hz | ✅ |
 | 2160p @ 60 Hz | ✅ |
-| 1440p @ 120 Hz | ⚠️ experimental, with `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` (kernel rebuild, see below). Can be unstable after boot |
+| 1440p @ 120 Hz | ⚠️ experimental, with `patches/0002` and `0003` (kernel rebuild, see below) |
 
 **1440p @ 120 Hz:** the ps5-linux kernel only allows 1440p at 60 Hz, even though PS5 OS can do 120. `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` does two things:
 
@@ -406,13 +406,16 @@ sudo systemctl enable --now ps5fan ps5boost
 
 Apply it in the kernel tree after `linux.patch` (`patch -p1 < .../0002-*.patch`), then rebuild ([section 11](#11-boot-settings-and-building-your-own-kernel)). It's built into the kernel, so only the bzImage changes. dmesg shows `FLAVA3 1440p: standard syncs ...` when the fix kicks in.
 
-**Known issue: unstable after boot.** It ran fine for me for a whole session, but on a later boot the picture kept blacking out right after boot. It would come back for a moment and drop again, and switching monitor inputs didn't reliably fix it. The kernel logs nothing when this happens (just the usual link-training errors at boot), so the HDMI signal is probably right at its limit. If you try 120 Hz, use a short, certified Ultra High Speed HDMI cable. 1080p@120 has been stable throughout.
+**Blackouts after boot: `patches/0003-ps5-hdmi-event4-unmute.patch`.** With only `0002`, the picture would often show for a few seconds after boot and then go black, with nothing in the kernel log. The cause is the HDMI chip's firmware: about 1-3 seconds after a mode set it sends an "event 4", restarts HDCP (HDMI copy protection) on its own and mutes the picture. `0003` catches that event, stops HDCP again and unmutes the picture. It's from [ps5-linux-patches#55](https://github.com/ps5-linux/ps5-linux-patches/issues/55).
 
-What fixes the boot blackouts, from least to most effort:
+Apply it after `0002` (`patch -p1 < .../0003-*.patch`) and rebuild. dmesg shows `event 4: stopped HDCP (0) and unmuted` when it kicks in. With it, my PS5 booted straight into 1440p@120 with no blackout. That's two clean boots so far; the fix caught the mute on one of them. If it still blacks out for you, the workarounds below still apply. Use a short, certified Ultra High Speed HDMI cable either way. 1080p@120 has been stable throughout.
 
-1. **Switch VTs: Ctrl+Alt+F7, then Ctrl+Alt+F1.** Leaving tty1 and coming back makes the compositor do a full mode set, and the picture comes back and stays. This has worked for me on several boots.
-2. **If the picture comes back for a few seconds before dropping again:** use that window to switch to 60 Hz in Display Settings, confirm, then switch back to 120 Hz. The fresh mode set usually holds.
-3. **If you can't see anything at all:** switch to 60 Hz from a terminal or over SSH with `kscreen-doctor output.DP-1.mode.<n>` (`kscreen-doctor -o` lists the modes). KDE's "Keep display configuration?" prompt reverts changes you can't confirm, so the GUI won't work blind.
+What fixes the boot blackouts without `0003`, from least to most effort:
+
+1. **Unplug the HDMI cable and plug it back in.** The picture comes back at 1440p@120 and stays.
+2. **Switch VTs: Ctrl+Alt+F7, then Ctrl+Alt+F1.** Leaving tty1 and coming back makes the compositor do a full mode set, and the picture comes back and stays. This has worked for me on several boots.
+3. **If the picture comes back for a few seconds before dropping again:** use that window to switch to 60 Hz in Display Settings, confirm, then switch back to 120 Hz. The fresh mode set usually holds.
+4. **If you can't see anything at all:** switch to 60 Hz from a terminal or over SSH with `kscreen-doctor output.DP-1.mode.<n>` (`kscreen-doctor -o` lists the modes). KDE's "Keep display configuration?" prompt reverts changes you can't confirm, so the GUI won't work blind.
 
 **After the VT switch, USB keyboard, mouse or controllers sometimes stop responding.** Unplug them and plug them back in.
 
@@ -422,6 +425,7 @@ Runtime switches (they apply on the next mode set, so switch to 60 Hz and back):
 |---|---|---|
 | `/sys/module/hdmi/parameters/sync_fixup` | `Y` | Picture position fix. `N` turns it off |
 | `/sys/module/hdmi/parameters/hiclk_mask` | `7` | Which 2160p60 settings 1440p120 uses. `0xf` adds a group that pushed the picture down on my G5, so leave it at `7` |
+| `/sys/module/hdmi/parameters/event4_fix` | `Y` | Undo the event 4 mute (`0003`). `N` only logs the event |
 
 <sub>[↑ Back to contents](#contents)</sub>
 
@@ -449,7 +453,7 @@ root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-stora
 
 ### Building your own kernel
 
-Only needed for the [Bluetooth fix](#no-bluetooth-adapter-at-all) or the [1440p120 patch](#10-video-playback-and-refresh-rates). The image's kernel works without it.
+Only needed for the [Bluetooth fix](#no-bluetooth-adapter-at-all) or the [1440p120 patches](#10-video-playback-and-refresh-rates). The image's kernel works without it.
 
 Use the mainline kernel source with `linux.patch` and `.config` from [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches). Then:
 
@@ -517,6 +521,7 @@ Then restart your browser.
 | `files/etc/modules-load.d/dualsense.conf` | Loads `hidp` + `hid_playstation` | 8 |
 | `patches/0001-xhci-pci-re-enable-salina-init.patch` | Kernel patch that brings Bluetooth back | 8 |
 | `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` | Kernel patch for 1440p @ 120 Hz with the right picture position | 10 |
+| `patches/0003-ps5-hdmi-event4-unmute.patch` | Kernel patch that stops the picture blacking out a few seconds after a mode set | 10 |
 | `files/etc/systemd/zram-generator.conf` | zram swap, ram/2, zstd | 9 |
 | `files/home/steam/.config/chrome-flags.conf` | Chrome hardware decode flags | 10 |
 | `files/boot/efi/cmdline.txt.example` | Kernel command line | 11 |
