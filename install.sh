@@ -63,7 +63,7 @@ core_list() {  # core_list <done-text> -> one line per core fix
 
 HINT="Space: tick/untick   Enter: install   Esc: cancel"
 GUIDE="https://github.com/abrocoma/cachyos-ps5-guide"
-SEP=$(printf "%76s" "" | tr " " -)
+SEP=$(printf "%74s" "" | tr " " -)
 # block-letter logo, only where the terminal can show it
 LOGO=; [ "$(locale charmap 2>/dev/null)" = UTF-8 ] && LOGO='           ▄▀▀ ▄▀▄ ▄▀▀ █ █ █ █ ▄▀▄ ▄▀▀    ▄▀▄ █▄ █    █▀▄ ▄▀▀ █▀▀\n           █   █▀█ █   █▀█  █  █ █  ▀▄    █ █ █ ▀█    █▀   ▀▄ ▀▀▄\n            ▀▀ ▀ ▀  ▀▀ ▀ ▀  ▀   ▀  ▀▀      ▀  ▀  ▀    ▀   ▀▀  ▀▀\n\n'
 summary() {  # one line under the core fixes
