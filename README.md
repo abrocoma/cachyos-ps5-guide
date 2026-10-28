@@ -414,7 +414,7 @@ sudo systemctl enable --now ps5fan ps5boost
 | 1080p @ 60 Hz | ✅ |
 | 1440p @ 60 Hz | ✅ |
 | 2160p @ 60 Hz | ✅ |
-| 1440p @ 120 Hz | ⚠️ experimental, with `patches/0002` and `0003` (kernel rebuild, see below) |
+| 1440p @ 120 Hz | ✅ with `patches/0002` and `0003` (kernel rebuild, see below). Tested on a Samsung Odyssey G5 |
 
 **1440p @ 120 Hz:** the ps5-linux kernel only allows 1440p at 60 Hz, even though PS5 OS can do 120. `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` does two things:
 
