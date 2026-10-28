@@ -64,6 +64,8 @@ core_list() {  # core_list <done-text> -> one line per core fix
 HINT="Space: tick/untick   Enter: install   Esc: cancel"
 GUIDE="https://github.com/abrocoma/cachyos-ps5-guide"
 SEP=$(printf "%76s" "" | tr " " -)
+# block-letter logo, only where the terminal can show it
+LOGO=; [ "$(locale charmap 2>/dev/null)" = UTF-8 ] && LOGO='           ▄▀▀ ▄▀▄ ▄▀▀ █ █ █ █ ▄▀▄ ▄▀▀    ▄▀▄ █▄ █    █▀▄ ▄▀▀ █▀▀\n           █   █▀█ █   █▀█  █  █ █  ▀▄    █ █ █ ▀█    █▀   ▀▄ ▀▀▄\n            ▀▀ ▀ ▀  ▀▀ ▀ ▀  ▀   ▀  ▀▀      ▀  ▀  ▀    ▀   ▀▀  ▀▀\n\n'
 summary() {  # one line under the core fixes
     for c in dp ds zram boot chrome; do "core_$c" || { echo "Missing core fixes will be installed."; return; }; done
     echo "Core fixes already installed."
@@ -119,10 +121,12 @@ elif command -v dialog >/dev/null && [ -t 0 ]; then
         set -- "$@" "$e" "$(printf '%-42s' "$(label "$e")")($st)" "$on"
     done
     CORE=$(core_list '\Z2\Zbinstalled\Zn')
+    H=28; rows=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f1)
+    [ "${rows:-0}" -lt $H ] && { LOGO=; H=24; }   # small terminal: no logo
     printf '\033[?25l'  # hide the cursor, it sits on the first letter of OK
     PICK=$(dialog --colors --no-collapse --title " CachyOS on PS5 installer " --separate-output --checklist \
-        "\n                \Zu$GUIDE\Zn\n\n\ZbCore fixes\Zn (included):\n$CORE\n\Z2\Zb$(summary)\Zn\n$SEP\n\ZbExtras\Zn (install or reinstall):\n\Z4\Zb$HINT\Zn" \
-        24 80 4 "$@" 3>&1 1>&2 2>&3) || { printf '\033[?25h'; clear; echo "cancelled, nothing changed"; exit 0; }
+        "\n\Zb$LOGO\Zn                \Zu$GUIDE\Zn\n\n\ZbCore fixes\Zn (included):\n$CORE\n\Z2\Zb$(summary)\Zn\n$SEP\n\ZbExtras\Zn (install or reinstall):\n\Z4\Zb$HINT\Zn" \
+        $H 80 4 "$@" 3>&1 1>&2 2>&3) || { printf '\033[?25h'; clear; echo "cancelled, nothing changed"; exit 0; }
     printf '\033[?25h'; clear
 elif command -v whiptail >/dev/null && [ -t 0 ]; then
     set --
@@ -132,10 +136,10 @@ elif command -v whiptail >/dev/null && [ -t 0 ]; then
     done
     CORE=$(core_list "installed")
     PICK=$(whiptail --title "CachyOS on PS5 installer" --separate-output --checklist \
-        "\n               $GUIDE\n\nCore fixes (included):\n$CORE\n$(summary)\n$SEP\nExtras (install or reinstall):\n$HINT" \
-        29 78 4 "$@" 3>&1 1>&2 2>&3) || { echo "cancelled, nothing changed"; exit 0; }
+        "\n$LOGO               $GUIDE\n\nCore fixes (included):\n$CORE\n$(summary)\n$SEP\nExtras (install or reinstall):\n$HINT" \
+        33 78 4 "$@" 3>&1 1>&2 2>&3) || { echo "cancelled, nothing changed"; exit 0; }
 else
-    echo; echo "$GUIDE"; echo
+    echo; printf '%b' "$LOGO"; echo "$GUIDE"; echo
     echo "Core fixes (included):"; printf "%b" "$(core_list "installed")"; echo; summary; echo "$SEP"; echo "Extras (install or reinstall):"
     for e in $EXTRAS; do
         printf '%s (%s)? [Y/n] ' "$(label "$e")" "$(status "$e")"

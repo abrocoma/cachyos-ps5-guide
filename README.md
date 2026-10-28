@@ -305,6 +305,8 @@ cd cachyos-ps5-guide
 sudo ./install.sh
 ```
 
+![The installer menu: core fixes with their status, then a checklist of extras](images/installer.png)
+
 It always installs the black screen lock, DualSense reconnect, zram, boot-order fix and Chrome video flags, and says which were already installed. A menu lets you pick the extras. Anything already installed shows up as "installed" and starts unticked; tick it anyway to reinstall (e.g. the Wi-Fi driver after a kernel update):
 
 - Fan and boost control ([section 9](#9-fan-performance-and-memory), needs internet)
@@ -470,13 +472,69 @@ root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-stora
 
 Only needed for the [Bluetooth fix](#no-bluetooth-adapter-at-all) or the [1440p120 patches](#10-video-playback-and-refresh-rates). The image's kernel works without it.
 
-Use the mainline kernel source with `linux.patch` and `.config` from [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches). Then:
+This builds the same kernel as in "Tested on": Linux 7.2.3 + ps5-linux-patches `1ec6a4a` + patches `0001`-`0003` from this repo. It needs about **15 GB free** and takes **30-60 minutes** on the PS5. Everything stays on your own PS5.
 
-| Problem | Fix |
-|---|---|
-| Kernel changes do nothing / wrong kernel boots | The PS5 boots from `/boot/efi/{bzImage,initrd.img,cmdline.txt}`, **not** `/boot`. `make install` does nothing; copy the kernel and initrd into `/boot/efi` yourself. |
-| Huge initramfs, slow or failing boot | `make modules_install INSTALL_MOD_STRIP=1`. Unstripped, amdgpu.ko alone is ~775 MB and the initramfs grows to ~300 MB. |
-| No hardware video decode | Copy `firmware/amdgpu/ps5_vcn.bin` from ps5-linux-patches to `/lib/firmware/amdgpu/` **before** running mkinitcpio. |
+**1. Build tools**
+```sh
+sudo pacman -S --needed base-devel bc pahole cpio git
+```
+
+**2. Get the sources**
+```sh
+mkdir -p ~/kernel && cd ~/kernel
+curl -LO https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.3.tar.xz
+tar xf linux-7.2.3.tar.xz
+git clone https://github.com/ps5-linux/ps5-linux-patches
+git -C ps5-linux-patches checkout 1ec6a4a
+git clone https://github.com/abrocoma/cachyos-ps5-guide
+```
+
+**3. Apply the patches** (in this order)
+```sh
+cd ~/kernel/linux-7.2.3
+patch -p1 < ../ps5-linux-patches/linux.patch
+patch -p1 < ../cachyos-ps5-guide/patches/0001-xhci-pci-re-enable-salina-init.patch
+patch -p1 < ../cachyos-ps5-guide/patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch
+patch -p1 < ../cachyos-ps5-guide/patches/0003-ps5-hdmi-event4-unmute.patch
+```
+
+**4. Configure and build**
+```sh
+cp ../ps5-linux-patches/.config .config
+scripts/config --set-str LOCALVERSION "-ps5"    # names it 7.2.3-ps5, so it doesn't clash with the image's kernel
+make olddefconfig
+make -j"$(nproc)" bzImage modules               # the long part
+```
+
+**5. Install the modules, firmware and initramfs**
+```sh
+KVER=$(make -s kernelrelease)                   # 7.2.3-ps5
+sudo make modules_install INSTALL_MOD_STRIP=1   # stripped, or the initramfs grows to ~300 MB
+sudo cp ../ps5-linux-patches/firmware/amdgpu/ps5_vcn.bin /lib/firmware/amdgpu/   # hardware video decode
+sudo mkinitcpio -k "$KVER" -g "/boot/efi/initrd-$KVER.img"
+sudo cp arch/x86/boot/bzImage "/boot/efi/bzImage-$KVER"
+```
+The PS5 boots from `/boot/efi`, not `/boot`, so `make install` does nothing.
+
+**6. Test it without rebooting** (kexec starts the new kernel straight from the running one, so you stay in Linux)
+```sh
+nmcli radio wifi off; sudo modprobe -r moal      # Wi-Fi off first, it can hang during kexec
+sudo kexec -l "/boot/efi/bzImage-$KVER" --initrd="/boot/efi/initrd-$KVER.img" --command-line="$(cat /boot/efi/cmdline.txt)"
+sudo kexec -e
+```
+Once it's up, check `uname -r` says `7.2.3-ps5`, then reinstall the Wi-Fi driver for the new kernel: `sudo ./install.sh` from this repo, tick **Wi-Fi driver**.
+
+**7. Make it the default** (only once the test worked)
+```sh
+sudo cp /boot/efi/bzImage /boot/efi/bzImage.bak
+sudo cp /boot/efi/initrd.img /boot/efi/initrd.img.bak
+sudo cp "/boot/efi/bzImage-$KVER" /boot/efi/bzImage
+sudo cp "/boot/efi/initrd-$KVER.img" /boot/efi/initrd.img
+```
+
+**Going back:** copy `bzImage.bak` and `initrd.img.bak` back over `bzImage` and `initrd.img`. If Linux won't boot at all, do it from a PC: the `boot` partition on the SSD is FAT32, so any PC can open it.
+
+When you're done, `rm -rf ~/kernel` frees the 15 GB.
 
 <sub>[↑ Back to contents](#contents)</sub>
 
