@@ -196,6 +196,13 @@ fi
 if picked wifi; then
     if online; then
         d=$(clone https://github.com/ps5-linux/ps5-linux-mwifiex)
+        # freeze fix (patches/0004); skipped with a warning if upstream changed too much
+        fix=$REPO/patches/0004-mwifiex-txpower-bounded-wait.patch
+        if git -C "$d" apply --check "$fix" 2>/dev/null; then
+            git -C "$d" apply "$fix"; echo "  Wi-Fi driver: freeze fix applied"
+        else
+            echo "  Wi-Fi driver: freeze fix doesn't apply to this driver version, installing without it"
+        fi
         (cd "$d" && ./install.sh)
         nmcli radio wifi on
         echo "  Wi-Fi driver: installed. Re-run this after every kernel update."

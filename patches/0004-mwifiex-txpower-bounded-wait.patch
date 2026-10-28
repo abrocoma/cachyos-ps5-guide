@@ -1,0 +1,71 @@
+ps5-linux-mwifiex: stop a stuck Wi-Fi firmware from freezing all networking
+
+Applies to ps5-linux-mwifiex (tested on 4bce848). install.sh in this guide
+applies it automatically; by hand: git apply 0004-mwifiex-txpower-bounded-wait.patch
+in the ps5-linux-mwifiex checkout, then run its install.sh.
+
+When the IW620 firmware stops answering (no auth reply after "HostMlme send
+auth", then a TXPWR_CFG 0xd1 timeout), woal_set_get_tx_power() waited forever
+(MOAL_IOCTL_WAIT) while cfg80211 held the wiphy mutex. NetworkManager holds
+RTNL while waiting for that mutex, so every network call on the machine hung
+(processes stuck in D state, the desktop froze on anything network related).
+The query now uses MOAL_IOCTL_WAIT_TIMEOUT, like the station-info queries in
+the existing RTNL bounded-wait patch, so a dead firmware gives a timeout
+instead of a freeze.
+
+Adds ps5-iw620-txpower-bounded-wait.patch and the step in install.sh that
+applies it after the TX priority patch.
+
+diff --git a/install.sh b/install.sh
+index d5c91eb..d1c1612 100755
+--- a/install.sh
++++ b/install.sh
+@@ -18,6 +18,7 @@ RTNL_PATCH=$script_dir/ps5-iw620-rtnl-bounded-wait.patch
+ HE_PATCH=$script_dir/ps5-iw620-he.patch
+ TX_PATCH=$script_dir/ps5-iw620-tx-min128.patch
+ PRIORITY_PATCH=$script_dir/ps5-iw620-tx-priority.patch
++TXPWR_PATCH=$script_dir/ps5-iw620-txpower-bounded-wait.patch
+ 
+ MODULE_DIR=/lib/modules/$KERNEL_RELEASE/extra/ps5-iw620
+ MODPROBE_CONF=/etc/modprobe.d/ps5-iw620.conf
+@@ -181,6 +182,16 @@ prepare_source() {
+ 	else
+ 		die "TX priority patch does not apply cleanly in $DRIVER_DIR"
+ 	fi
++
++	[ -f "$TXPWR_PATCH" ] || die "patch file not found: $TXPWR_PATCH"
++	if git_driver apply --check "$TXPWR_PATCH" >/dev/null 2>&1; then
++		say "Applying TX power bounded-wait patch"
++		git_driver apply "$TXPWR_PATCH"
++	elif git_driver apply -R --check "$TXPWR_PATCH" >/dev/null 2>&1; then
++		say "TX power bounded-wait patch is already applied"
++	else
++		die "TX power bounded-wait patch does not apply cleanly in $DRIVER_DIR"
++	fi
+ }
+ 
+ build_driver() {
+diff --git a/ps5-iw620-txpower-bounded-wait.patch b/ps5-iw620-txpower-bounded-wait.patch
+new file mode 100644
+index 0000000..9c44245
+--- /dev/null
++++ b/ps5-iw620-txpower-bounded-wait.patch
+@@ -0,0 +1,18 @@
++--- a/mlinux/moal_ioctl.c
+++++ b/mlinux/moal_ioctl.c
++@@ -1904,7 +1904,14 @@
++ 				power_cfg, sizeof(mlan_power_cfg_t),
++ 				sizeof(mlan_power_cfg_t));
++ 
++-	ret = woal_request_ioctl(priv, req, MOAL_IOCTL_WAIT);
+++	/* cfg80211 calls this from nl80211_get_interface() and set_tx_power with
+++	 * the wiphy mutex held, and NetworkManager can be holding RTNL while it
+++	 * waits for that mutex. With MOAL_IOCTL_WAIT a firmware that stops
+++	 * answering (TXPWR_CFG 0xd1 timeout) strands wpa_supplicant here forever
+++	 * and every network syscall on the machine blocks in D state. Bound it
+++	 * like the station-info queries in the RTNL bounded-wait patch.
+++	 */
+++	ret = woal_request_ioctl(priv, req, MOAL_IOCTL_WAIT_TIMEOUT);
++ 	if (ret != MLAN_STATUS_SUCCESS)
++ 		goto done;
++ 

@@ -15,6 +15,7 @@
 
 | | |
 |---|---|
+| **Console** | PS5 launch model ("phat") Digital Edition, CFI-1016B |
 | **PS5 firmware** | 13.60 |
 | **Linux loader** | [soniciso1's ps5-linux-loader](https://github.com/soniciso1/ps5-linux-loader/releases) |
 | **Drive** | 1 TB USB-C SSD, USB-C to USB-C cable |
@@ -259,9 +260,13 @@ The kernel has no built-in driver for the PS5's Wi-Fi chip. Install the PS5-patc
 ```sh
 git clone https://github.com/ps5-linux/ps5-linux-mwifiex
 cd ps5-linux-mwifiex
+git apply ../cachyos-ps5-guide/patches/0004-mwifiex-txpower-bounded-wait.patch   # freeze fix, see below
 sudo ./install.sh        # builds for your running kernel and loads it right away
 nmcli radio wifi on
 ```
+The installer from [section 7](#7-install-all-the-fixes-in-one-go) does all of this, including the freeze fix.
+
+**Freeze fix (`patches/0004`):** sometimes the Wi-Fi firmware stops answering while connecting. Without the fix, the driver then waits forever, and everything network-related hangs with it: the network icon, Steam, browsers, even `nmcli`, until you reboot. With it, the driver gives up after a timeout and the rest of the system keeps working.
 
 > [!IMPORTANT]
 > **Run `install.sh` again after every kernel update**, or Wi-Fi disappears.
@@ -364,6 +369,9 @@ hid_playstation
 **Symptom:** no `hci0`, and dmesg shows `xhci_hcd 0000:40:00.6: Host halt failed, -110`.
 
 **Cause:** a 2026-09 [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches) commit ("disable xhci") turns off the init of the USB controller that Bluetooth is on (`xhci_salina_init()` is wrapped in `#if 0`). Kernels built before that commit are fine.
+
+> [!NOTE]
+> **Fixed upstream** in ps5-linux-patches `9bad84f` (2026-10-27). You only need `0001` when building from `1ec6a4a` or older, which is what the patches in this guide are based on.
 
 **Fix:** needs a kernel rebuild ([section 11](#11-boot-settings-and-building-your-own-kernel)). Apply `patches/0001-xhci-pci-re-enable-salina-init.patch` from this repo in the kernel tree (`patch -p1 < .../0001-*.patch`), or delete that `#if 0` / `#endif` by hand, then rebuild and boot the bzImage. Reloading modules or rebinding won't help, because xHCI is built into the kernel.
 
@@ -529,6 +537,7 @@ Then restart your browser.
 | `patches/0001-xhci-pci-re-enable-salina-init.patch` | Kernel patch that brings Bluetooth back | 8 |
 | `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` | Kernel patch for 1440p @ 120 Hz with the right picture position | 10 |
 | `patches/0003-ps5-hdmi-event4-unmute.patch` | Kernel patch that stops the picture blacking out a few seconds after a mode set | 10 |
+| `patches/0004-mwifiex-txpower-bounded-wait.patch` | Wi-Fi driver patch that stops a stuck firmware from freezing all networking | 6 |
 | `files/etc/systemd/zram-generator.conf` | zram swap, ram/2, zstd | 9 |
 | `files/home/steam/.config/chrome-flags.conf` | Chrome hardware decode flags | 10 |
 | `files/boot/efi/cmdline.txt.example` | Kernel command line | 11 |
