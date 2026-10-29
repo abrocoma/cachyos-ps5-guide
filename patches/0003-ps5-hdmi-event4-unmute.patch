@@ -1,6 +1,6 @@
 ps5: hdmi: undo the FLAVA3 "event 4" mute that blacks out the picture
 
-Applies on top of linux.patch from ps5-linux-patches (tested on 1ec6a4a,
+Applies on top of linux.patch from ps5-linux-patches (tested on 730b80e,
 kernel 7.2.3) and 0002-ps5-hdmi-1440p120-and-sync-fixup.patch.
 Apply with: patch -p1 < 0003-ps5-hdmi-event4-unmute.patch
 
@@ -15,11 +15,13 @@ unmutes video and audio, logging "event 4: stopped HDCP (r) and unmuted".
 From ps5-linux-patches#55. Toggle: /sys/module/hdmi/parameters/event4_fix
 (default Y; N only logs the event).
 
+The version for 1ec6a4a and older is in this repo's history (commit 699e2eb):
+upstream #57 rewrote hdmi_notification_handler(), so it no longer applies.
+
 diff --git a/drivers/ps5/hdmi.c b/drivers/ps5/hdmi.c
-index 2d8ed03..8268cec 100644
 --- a/drivers/ps5/hdmi.c
 +++ b/drivers/ps5/hdmi.c
-@@ -1416,8 +1416,30 @@ void hdmi_set_cec_handler(void (*handler)(void *data, const struct icc_msg *msg)
+@@ -1443,6 +1443,15 @@
  }
  EXPORT_SYMBOL(hdmi_set_cec_handler);
  
@@ -34,19 +36,23 @@ index 2d8ed03..8268cec 100644
 +
  void hdmi_notification_handler(struct icc_msg *msg)
  {
-+		if (msg->msg_type == 0x8001 && msg->data[1] == 0x04 &&
-+		    hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
-+			if (event4_fix) {
-+				int r = stopHdcpHw();
+ 	const struct drm_edid *edid, *old;
+@@ -1450,6 +1459,18 @@
+ 
+ 	if (msg->length < sizeof(*msg) + 4 || msg->length > ICC_MSG_MAX_SIZE)
+ 		return;
++	if (msg->msg_type == 0x8001 && msg->data[1] == 0x04 &&
++	    hdmi_ic_type == HDMI_IC_TYPE_FLAVA3) {
++		if (event4_fix) {
++			int r = stopHdcpHw();
 +
-+				sceHdmiDeviceSetVideoMute(0);
-+				sceHdmiSetAudioMute(0);
-+				pr_info("event 4: stopped HDCP (%d) and unmuted\n", r);
-+			} else {
-+				pr_info("event 4 (event4_fix off)\n");
-+			}
++			sceHdmiDeviceSetVideoMute(0);
++			sceHdmiSetAudioMute(0);
++			pr_info("event 4: stopped HDCP (%d) and unmuted\n", r);
++		} else {
++			pr_info("event 4 (event4_fix off)\n");
 +		}
-+
- 		if (msg->data[1] == 0x02) {
- 			fix_edid(&msg->data[4]);
- 			real_edid = drm_edid_alloc(&msg->data[4], *(u16 *)&msg->data[2]);
++	}
+ 	if (msg->data[1] != 0x02)
+ 		goto notify_cec;
+ 	length = get_unaligned_le16(msg->data + 2);

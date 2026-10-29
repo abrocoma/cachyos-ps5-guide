@@ -1,6 +1,6 @@
 ps5: hdmi: allow 1440p120 and fix the 1440p picture position on FLAVA3
 
-Applies on top of linux.patch from ps5-linux-patches (tested on 1ec6a4a,
+Applies on top of linux.patch from ps5-linux-patches (tested on 1ec6a4a and 730b80e,
 kernel 7.2.3). Apply with: patch -p1 < 0002-ps5-hdmi-1440p120-and-sync-fixup.patch
 
 1. isHdmiModeValid() only allowed 1440p60, so 1440p only showed 60 Hz.

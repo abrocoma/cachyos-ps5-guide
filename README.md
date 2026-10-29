@@ -20,7 +20,7 @@
 | **Linux loader** | [soniciso1's ps5-linux-loader](https://github.com/soniciso1/ps5-linux-loader/releases) |
 | **Drive** | 1 TB USB-C SSD, USB-C to USB-C cable |
 | **OS image** | official [ps5-linux CachyOS image](https://github.com/ps5-linux/ps5-linux-image/releases/tag/latest) |
-| **Kernel** | 7.2.3, built with [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches) |
+| **Kernel** | 7.2.3, built with [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches) `730b80e` ([how](#building-your-own-kernel)) |
 | **Desktop** | KDE Plasma (Gaming Mode optional) |
 
 Big thanks to **[soniciso1](https://github.com/soniciso1)** for the loader with 13.60 support, and to the **[ps5-linux](https://github.com/ps5-linux)** project for the kernel, image and tools. Full list in [Credits](#credits).
@@ -373,7 +373,7 @@ hid_playstation
 **Cause:** a 2026-09 [ps5-linux-patches](https://github.com/ps5-linux/ps5-linux-patches) commit ("disable xhci") turns off the init of the USB controller that Bluetooth is on (`xhci_salina_init()` is wrapped in `#if 0`). Kernels built before that commit are fine.
 
 > [!NOTE]
-> **Fixed upstream** in ps5-linux-patches `9bad84f` (2026-10-27). You only need `0001` when building from `1ec6a4a` or older, which is what the patches in this guide are based on.
+> **Fixed upstream** in ps5-linux-patches `9bad84f` (2026-10-27). You only need `0001` when building from `1ec6a4a` or older. The kernel build in [section 11](#building-your-own-kernel) now uses `730b80e`, so it doesn't need `0001`.
 
 **Fix:** needs a kernel rebuild ([section 11](#11-boot-settings-and-building-your-own-kernel)). Apply `patches/0001-xhci-pci-re-enable-salina-init.patch` from this repo in the kernel tree (`patch -p1 < .../0001-*.patch`), or delete that `#if 0` / `#endif` by hand, then rebuild and boot the bzImage. Reloading modules or rebinding won't help, because xHCI is built into the kernel.
 
@@ -390,6 +390,16 @@ cd ps5-linux-tools
 sudo ./install.sh
 sudo systemctl enable --now ps5fan ps5boost
 ```
+
+**Fan curve (kernels with ps5-linux-patches `730b80e` or newer):** the kernel has its own temperature-following fan control (`hwmon`, name `ps5_fan`, quiet curve by default). Don't run `ps5fan` alongside it: `ps5_control --fan on` changes the firmware fan setting behind the driver's back and pins the fan loud. Turn it off with `sudo systemctl disable ps5fan` (keep `ps5boost`). If the fan was already pinned, `echo 0 | sudo tee .../pwm1_enable; echo 2 | sudo tee .../pwm1_enable` in the `ps5_fan` hwmon folder hands it back to the curve.
+
+The curve has 8 points: `pwm1_auto_point1..8_temp` (millidegrees) and `pwm1_auto_point1..8_pwm` (0-255, the last must be 255). The firmware still forces full speed at 90 °C. Mine is quieter than the default and holds CS2 at about 67 °C:
+
+| °C | 55 | 60 | 65 | 70 | 75 | 80 | 85 | 88 |
+|---|---|---|---|---|---|---|---|---|
+| PWM | 5 | 16 | 31 | 48 | 67 | 120 | 190 | 255 |
+
+Values reset at every boot, so set them from a small boot service if you change them.
 
 **Memory:** zram swap (`zram-size = ram / 2`, `compression-algorithm = zstd`). `install.sh` from this repo sets it up.
 
@@ -456,7 +466,7 @@ Runtime switches (they apply on the next mode set, so switch to 60 Hz and back):
 
 **Problem:** root not found, or boot hangs waiting for the disk. The USB SSD shows up slowly, and USB-C SSDs can drop off under load. My `cmdline.txt` (on the `boot` partition):
 ```
-root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-storage.quirks=xxxx:yyyy:u console=ttyTitania0 console=tty0 video=DP-1:1920x1080@60 mitigations=off idle=halt preempt=full
+root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-storage.quirks=xxxx:yyyy:u console=ttyTitania0 console=tty0 video=DP-1:1920x1080@60 mitigations=off idle=halt preempt=full usbc_dp.enable=0
 ```
 
 | Setting | What it does |
@@ -465,6 +475,7 @@ root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-stora
 | `usbcore.autosuspend=-1` | Stops USB from going to sleep |
 | `usb-storage.quirks=xxxx:yyyy:u` | Turns off UAS for the SSD. Many USB-C SSDs have buggy UAS (resets, I/O errors, freezes). **Replace `xxxx:yyyy`** with your drive's ID from `lsusb`. Several drives: `xxxx:yyyy:u,aaaa:bbbb:u` |
 | `video=DP-1:1920x1080@60` | Safe display mode at boot ([section 5](#5-black-screen-fixes)) |
+| `usbc_dp.enable=0` | Kernels with ps5-linux-patches `9bad84f` or newer: turns off the new USB-C display driver. Without it, a USB-C SSD on the front port drops off about 7 s after boot and the system hangs. Harmless on older kernels |
 
 **Renaming the root label (optional):** mine is `cachyos-ssd` instead of `cachyos`, which helps with more than one ps5-linux drive. If you rename it (`sudo e2label /dev/sdX1 cachyos-ssd`), change `root=LABEL=` in `cmdline.txt` **and** the `/` line in `/etc/fstab`, or it won't boot.
 
@@ -472,7 +483,7 @@ root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-stora
 
 Only needed for the [Bluetooth fix](#no-bluetooth-adapter-at-all) or the [1440p120 patches](#10-video-playback-and-refresh-rates). The image's kernel works without it.
 
-This builds the same kernel as in "Tested on": Linux 7.2.3 + ps5-linux-patches `1ec6a4a` + patches `0001`-`0003` from this repo. It needs about **15 GB free** and takes **30-60 minutes** on the PS5. Everything stays on your own PS5.
+This builds the same kernel as in "Tested on": Linux 7.2.3 + ps5-linux-patches `730b80e` + patches `0002`-`0003` from this repo (`0001` is fixed upstream). Add `usbc_dp.enable=0` to `cmdline.txt` first ([above](#boot-settings-for-usb-ssds)), or a USB-C SSD drops off on this kernel. It needs about **15 GB free** and takes **30-60 minutes** on the PS5. Everything stays on your own PS5.
 
 **1. Build tools**
 ```sh
@@ -485,7 +496,7 @@ mkdir -p ~/kernel && cd ~/kernel
 curl -LO https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.3.tar.xz
 tar xf linux-7.2.3.tar.xz
 git clone https://github.com/ps5-linux/ps5-linux-patches
-git -C ps5-linux-patches checkout 1ec6a4a
+git -C ps5-linux-patches checkout 730b80e
 git clone https://github.com/abrocoma/cachyos-ps5-guide
 ```
 
@@ -493,7 +504,6 @@ git clone https://github.com/abrocoma/cachyos-ps5-guide
 ```sh
 cd ~/kernel/linux-7.2.3
 patch -p1 < ../ps5-linux-patches/linux.patch
-patch -p1 < ../cachyos-ps5-guide/patches/0001-xhci-pci-re-enable-salina-init.patch
 patch -p1 < ../cachyos-ps5-guide/patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch
 patch -p1 < ../cachyos-ps5-guide/patches/0003-ps5-hdmi-event4-unmute.patch
 ```
@@ -592,7 +602,7 @@ Then restart your browser.
 | `files/etc/systemd/system/dp-link-lock.service` | Runs it before the display starts | 5 |
 | `files/etc/systemd/system/bt-connectable.service` | Lets the DualSense reconnect | 8 |
 | `files/etc/modules-load.d/dualsense.conf` | Loads `hidp` + `hid_playstation` | 8 |
-| `patches/0001-xhci-pci-re-enable-salina-init.patch` | Kernel patch that brings Bluetooth back | 8 |
+| `patches/0001-xhci-pci-re-enable-salina-init.patch` | Kernel patch that brings Bluetooth back (only for ps5-linux-patches `1ec6a4a` or older) | 8 |
 | `patches/0002-ps5-hdmi-1440p120-and-sync-fixup.patch` | Kernel patch for 1440p @ 120 Hz with the right picture position | 10 |
 | `patches/0003-ps5-hdmi-event4-unmute.patch` | Kernel patch that stops the picture blacking out a few seconds after a mode set | 10 |
 | `patches/0004-mwifiex-txpower-bounded-wait.patch` | Wi-Fi driver patch that stops a stuck firmware from freezing all networking | 6 |
