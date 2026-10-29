@@ -87,7 +87,7 @@ sha256sum ps5-cachyos.img.xz     # must match the checksum on the release page
 ```
 
 **Flash it:**
-- **Windows / macOS:** [balenaEtcher](https://etcher.balena.io/) can flash the `.img.xz` directly.
+- **Windows / macOS:** extract the `.img.xz` first to get `ps5-cachyos.img` (Windows: [7-Zip](https://www.7-zip.org/); macOS: double-click it, or `xz -dk ps5-cachyos.img.xz`), then flash the extracted `.img` with [balenaEtcher](https://etcher.balena.io/).
 - **Linux:** find the SSD with `lsblk` (a 1 TB drive shows as ~931G) and write to the **whole disk** (`/dev/sdX`, not `/dev/sdX1`):
   ```sh
   xzcat ps5-cachyos.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
