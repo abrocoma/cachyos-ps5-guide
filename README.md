@@ -80,11 +80,19 @@ Linux runs entirely from an external SSD. Nothing is installed on the PS5's inte
 > [!CAUTION]
 > Flashing **erases the whole SSD**.
 
-**Download** `ps5-cachyos.img.xz` from the [latest ps5-linux-image release](https://github.com/ps5-linux/ps5-linux-image/releases/tag/latest), and check it against the SHA256 listed there:
-```sh
-wget https://pub-561df4012f1a46fbbdf618d5cc5941f6.r2.dev/ps5-cachyos.img.xz
-sha256sum ps5-cachyos.img.xz     # must match the checksum on the release page
-```
+**Download** one of these two images. Both are 2 GB.
+
+- **With the fixes already installed (easiest):** `ps5-cachyos.img.xz` from [this guide's release](https://github.com/abrocoma/cachyos-ps5-guide/releases/tag/image-2026-10-31). It's an unofficial build of the official image with `install.sh`'s core fixes and the USB boot settings added, so you can skip [section 7](#7-install-all-the-fixes-in-one-go) unless you want the extras. Tested on my PS5. What's changed is listed on the release page.
+  ```sh
+  wget https://github.com/abrocoma/cachyos-ps5-guide/releases/download/image-2026-10-31/ps5-cachyos.img.xz
+  wget https://github.com/abrocoma/cachyos-ps5-guide/releases/download/image-2026-10-31/ps5-cachyos.img.xz.sha256
+  sha256sum -c ps5-cachyos.img.xz.sha256     # must say OK
+  ```
+- **Official:** `ps5-cachyos.img.xz` from the [latest ps5-linux-image release](https://github.com/ps5-linux/ps5-linux-image/releases/tag/latest), and check it against the SHA256 listed there:
+  ```sh
+  wget https://pub-561df4012f1a46fbbdf618d5cc5941f6.r2.dev/ps5-cachyos.img.xz
+  sha256sum ps5-cachyos.img.xz     # must match the checksum on the release page
+  ```
 
 **Flash it:**
 - **Windows / macOS:** extract the `.img.xz` first to get `ps5-cachyos.img` (Windows: [7-Zip](https://www.7-zip.org/); macOS: double-click it, or `xz -dk ps5-cachyos.img.xz`), then flash the extracted `.img` with [balenaEtcher](https://etcher.balena.io/).
@@ -299,6 +307,9 @@ It reconnects on its own at every boot. Check with `nmcli device status`: `wlp64
 
 ## 7. Install all the fixes in one go
 
+> [!NOTE]
+> Using [this guide's image](https://github.com/abrocoma/cachyos-ps5-guide/releases/tag/image-2026-10-31)? The core fixes are already installed. Run `install.sh` only for the extras.
+
 ```sh
 git clone https://github.com/abrocoma/cachyos-ps5-guide
 cd cachyos-ps5-guide
@@ -476,6 +487,13 @@ root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-stora
 | `usb-storage.quirks=xxxx:yyyy:u` | Turns off UAS for the SSD. Many USB-C SSDs have buggy UAS (resets, I/O errors, freezes). **Replace `xxxx:yyyy`** with your drive's ID from `lsusb`. Several drives: `xxxx:yyyy:u,aaaa:bbbb:u` |
 | `video=DP-1:1920x1080@60` | Safe display mode at boot ([section 5](#5-black-screen-fixes)) |
 | `usbc_dp.enable=0` | Kernels with ps5-linux-patches `9bad84f` or newer: turns off the new USB-C display driver. Without it, a USB-C SSD on the front port drops off about 7 s after boot and the system hangs. Harmless on older kernels |
+
+**Drive never shows up at all** (no `/dev/sd*` at the emergency shell, even after the 60 s wait): some drives get stuck when the PS5 hands over to Linux. My Samsung M3 USB HDD does this on every cold boot; my USB-C SSD never does. Push the cable all the way in first: a half-seated USB 3 Micro-B plug only connects at USB 2.0. If the drive still isn't found, unplug and replug it at the emergency shell, wait 10 seconds, then:
+```sh
+mount /dev/sda1 /new_root
+exit
+```
+The boot carries on from there. Use `ls /dev/sd*` to check the name first if you have more than one drive plugged in.
 
 **Renaming the root label (optional):** mine is `cachyos-ssd` instead of `cachyos`, which helps with more than one ps5-linux drive. If you rename it (`sudo e2label /dev/sdX1 cachyos-ssd`), change `root=LABEL=` in `cmdline.txt` **and** the `/` line in `/etc/fstab`, or it won't boot.
 
