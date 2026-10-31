@@ -488,12 +488,7 @@ root=LABEL=cachyos-ssd rw rootwait rootdelay=60 usbcore.autosuspend=-1 usb-stora
 | `video=DP-1:1920x1080@60` | Safe display mode at boot ([section 5](#5-black-screen-fixes)) |
 | `usbc_dp.enable=0` | Kernels with ps5-linux-patches `9bad84f` or newer: turns off the new USB-C display driver. Without it, a USB-C SSD on the front port drops off about 7 s after boot and the system hangs. Harmless on older kernels |
 
-**Drive never shows up at all** (no `/dev/sd*` at the emergency shell, even after the 60 s wait): some drives get stuck when the PS5 hands over to Linux. My Samsung M3 USB HDD does this on every cold boot; my USB-C SSD never does. Push the cable all the way in first: a half-seated USB 3 Micro-B plug only connects at USB 2.0. If the drive still isn't found, unplug and replug it at the emergency shell, wait 10 seconds, then:
-```sh
-mount /dev/sda1 /new_root
-exit
-```
-The boot carries on from there. Use `ls /dev/sd*` to check the name first if you have more than one drive plugged in.
+**Drive never shows up at all** (no `/dev/sd*` at the emergency shell, even after the 60 s wait): some drives get stuck when the PS5 hands over to Linux. My Samsung M3 USB HDD does this on every cold boot; my USB-C SSD never does. Push the cable all the way in first: a half-seated USB 3 Micro-B plug only connects at USB 2.0. If the drive still isn't found, unplug it and plug it back in while the boot waits for it. The boot carries on by itself. If you already ended up at the emergency shell, replug it, wait 10 seconds, then type `mount /dev/sda1 /new_root` and `exit` (check the name with `ls /dev/sd*` if more than one drive is plugged in).
 
 **Renaming the root label (optional):** mine is `cachyos-ssd` instead of `cachyos`, which helps with more than one ps5-linux drive. If you rename it (`sudo e2label /dev/sdX1 cachyos-ssd`), change `root=LABEL=` in `cmdline.txt` **and** the `/` line in `/etc/fstab`, or it won't boot.
 
