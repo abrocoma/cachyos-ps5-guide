@@ -82,12 +82,13 @@ Linux runs entirely from an external SSD. Nothing is installed on the PS5's inte
 
 **Download** one of these two images. Both are 2 GB.
 
-- **With the fixes already installed (easiest):** `ps5-cachyos.img.xz` from [this guide's release](https://github.com/abrocoma/cachyos-ps5-guide/releases/tag/image-2026-10-31). It's an unofficial build of the official image with `install.sh`'s core fixes and the USB boot settings added, so you can skip [section 7](#7-install-all-the-fixes-in-one-go) unless you want the extras. Tested on my PS5. What's changed is listed on the release page.
+- **With the fixes already installed (easiest):** `ps5-cachyos-7.2.3-p5f6b.img.xz` from [this guide's release](https://github.com/abrocoma/cachyos-ps5-guide/releases/tag/image-2026-11-10). It's an unofficial build of the official image with `install.sh`'s core fixes, the USB boot settings, a newer kernel (7.2.3 + ps5-linux-patches `5f6b5d3`), a SteamOS-style Gaming Mode with a working **Switch to Desktop**, and HDR on the desktop. You can skip [section 4](#4-boot-straight-to-the-desktop) and [section 7](#7-install-all-the-fixes-in-one-go) unless you want the extras. Tested on my PS5. What's changed is listed on the release page.
   ```sh
-  wget https://github.com/abrocoma/cachyos-ps5-guide/releases/download/image-2026-10-31/ps5-cachyos.img.xz
-  wget https://github.com/abrocoma/cachyos-ps5-guide/releases/download/image-2026-10-31/ps5-cachyos.img.xz.sha256
-  sha256sum -c ps5-cachyos.img.xz.sha256     # must say OK
+  wget https://github.com/abrocoma/cachyos-ps5-guide/releases/download/image-2026-11-10/ps5-cachyos-7.2.3-p5f6b.img.xz
+  wget https://github.com/abrocoma/cachyos-ps5-guide/releases/download/image-2026-11-10/ps5-cachyos-7.2.3-p5f6b.img.xz.sha256
+  sha256sum -c ps5-cachyos-7.2.3-p5f6b.img.xz.sha256     # must say OK
   ```
+  The flashing commands below use `ps5-cachyos.img.xz`. Use the file name you downloaded.
 - **Official:** `ps5-cachyos.img.xz` from the [latest ps5-linux-image release](https://github.com/ps5-linux/ps5-linux-image/releases/tag/latest), and check it against the SHA256 listed there:
   ```sh
   wget https://pub-561df4012f1a46fbbdf618d5cc5941f6.r2.dev/ps5-cachyos.img.xz
@@ -165,6 +166,9 @@ Check it worked: `lsblk` should show p1 at roughly the full size of your SSD.
 # Part 2: Make it usable
 
 ## 4. Boot straight to the desktop
+
+> [!TIP]
+> Using [this guide's image](https://github.com/abrocoma/cachyos-ps5-guide/releases/tag/image-2026-11-10) (2026-11-10 or newer)? **Switch to Desktop** in Steam's power menu works there, and the desktop's **Return to Gaming Mode** icon goes back. You can skip this section.
 
 **Problem:** the image starts **Gaming Mode** (gamescope) on boot. Steam's **Power → Switch to Desktop** crashes or leaves a black screen every time, because going from gamescope to the desktop breaks the PS5's HDMI bridge until a real reboot.
 
@@ -308,7 +312,7 @@ It reconnects on its own at every boot. Check with `nmcli device status`: `wlp64
 ## 7. Install all the fixes in one go
 
 > [!NOTE]
-> Using [this guide's image](https://github.com/abrocoma/cachyos-ps5-guide/releases/tag/image-2026-10-31)? The core fixes are already installed. Run `install.sh` only for the extras.
+> Using [this guide's image](https://github.com/abrocoma/cachyos-ps5-guide/releases/tag/image-2026-11-10)? The core fixes are already installed. Run `install.sh` only for the extras.
 
 ```sh
 git clone https://github.com/abrocoma/cachyos-ps5-guide
