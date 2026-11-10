@@ -1,8 +1,8 @@
 #!/bin/sh
 # Installs the fixes from this repo (see README).
 # Always: black screen lock, DualSense reconnect, zram, boot-order fix, Chrome flags.
-# Menu: fan + boost, Wi-Fi driver, DNS fix, boot to desktop (shows what's already installed).
-# Does NOT touch the kernel or /boot/efi (section 11).
+# Menu: boost (+ fan on older kernels), Wi-Fi driver, DNS fix, boot to desktop (shows what's already installed).
+# Does NOT touch the kernel or /boot/efi (section 12).
 # Usage: sudo ./install.sh        (sudo ./install.sh -y installs every extra not yet installed)
 set -e
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo ./install.sh)"; exit 1; }
@@ -22,7 +22,9 @@ put() {  # put <mode> <src> <dst> <label>
 }
 
 # --- status of the extras
-has_fan()     { systemctl is-enabled -q ps5fan 2>/dev/null && systemctl is-enabled -q ps5boost 2>/dev/null; }
+# kernels with ps5-linux-patches 730b80e+ run the fan themselves (hwmon ps5_fan); ps5fan would override that
+kfan()        { grep -qx ps5_fan /sys/class/hwmon/hwmon*/name 2>/dev/null; }
+has_fan()     { systemctl is-enabled -q ps5boost 2>/dev/null && { kfan || systemctl is-enabled -q ps5fan 2>/dev/null; }; }
 has_wifi()    { modinfo -k "$(uname -r)" moal >/dev/null 2>&1; }
 has_dns() {
     n=0
@@ -37,7 +39,7 @@ has_desktop() { [ "$(cat "$UHOME/.config/ps5-next-session" 2>/dev/null)" = plasm
 # --- pick the extras: menu, or yes/no questions without whiptail
 EXTRAS="fan wifi dns desktop"
 label() { case $1 in
-    fan) echo "Fan + boost control" ;; wifi) echo "Wi-Fi driver" ;;
+    fan) if kfan; then echo "Boost control"; else echo "Fan + boost control"; fi ;; wifi) echo "Wi-Fi driver" ;;
     dns) echo "Faster internet loading (Cloudflare DNS)" ;; desktop) echo "Skip Gamescope, boot to desktop" ;; esac; }
 note() { case $1 in
     fan) echo "needs internet" ;; wifi) echo "needs internet, a few minutes" ;;
@@ -161,7 +163,7 @@ else
     install -Dm644 etc/systemd/zram-generator.conf /etc/systemd/zram-generator.conf; echo "  zram: installed"
 fi
 
-# Boot ordering cycle fix (section 12)
+# Boot ordering cycle fix (section 11)
 f=/etc/systemd/system/ps5-stage-firmware.service
 if [ ! -f "$f" ]; then
     echo "  boot-order fix: not needed (no ps5-stage-firmware.service)"
@@ -176,7 +178,7 @@ fi
 systemctl daemon-reload
 systemctl enable -q dp-link-lock.service bluetooth.service bt-connectable.service
 
-# Chrome hardware video decode (section 10)
+# Chrome hardware video decode (section 6)
 f=$UHOME/.config/chrome-flags.conf
 if [ -e "$f" ]; then
     echo "  Chrome video flags: already installed"
@@ -190,10 +192,16 @@ if picked fan; then
     if online; then
         d=$(clone https://github.com/ps5-linux/ps5-linux-tools)
         (cd "$d" && ./install.sh)
-        systemctl enable --now ps5fan ps5boost
-        echo "  fan + boost: installed"
+        if kfan; then
+            systemctl disable --now ps5fan 2>/dev/null || true   # the kernel's fan curve stays in charge
+            systemctl enable --now ps5boost
+            echo "  boost: installed (fan: the kernel's own curve)"
+        else
+            systemctl enable --now ps5fan ps5boost
+            echo "  fan + boost: installed"
+        fi
     else
-        echo "  fan + boost: no internet, skipped. See section 9."
+        echo "  fan + boost: no internet, skipped. See section 6."
     fi
 fi
 
@@ -211,7 +219,7 @@ if picked wifi; then
         nmcli radio wifi on
         echo "  Wi-Fi driver: installed. Re-run this after every kernel update."
     else
-        echo "  Wi-Fi driver: no internet, skipped. See section 6."
+        echo "  Wi-Fi driver: no internet, skipped. See section 11."
     fi
 fi
 
